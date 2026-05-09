@@ -79,7 +79,11 @@ private func parseArguments(argc: Int, argv: vchar) -> [String: String] {
 
 private extension LAPolicy {
     static var deviceOwnerAuthenticationIgnoringUserID: LAPolicy {
-        return .deviceOwnerAuthenticationWithBiometricsOrWatch
+        if #available(macOS 15.0, *) {
+            return .deviceOwnerAuthenticationWithBiometricsOrCompanion
+        } else {
+            return .deviceOwnerAuthenticationWithBiometricsOrWatch
+        }
     }
 }
 
