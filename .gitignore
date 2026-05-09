@@ -3,3 +3,7 @@
 *.swp
 *.swo
 ._*
+pam_watchid.so
+pam_watchid.so.arm64
+pam_watchid.so.x86_64
+.task/

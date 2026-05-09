@@ -1,0 +1,62 @@
+# Taskfile for pam_watchid — alternative to the Makefile.
+# Both work; this is the modern declarative version.
+# Run with `task <target>` (https://taskfile.dev), or fall back to `make <target>`.
+version: "3"
+
+vars:
+  VERSION: "2"
+  LIBRARY_NAME: "pam_watchid.so"
+  SOURCE: "watchid-pam-extension.swift"
+  DESTINATION: "/usr/local/lib/pam"
+  MIN_MACOS: "11.0"
+
+tasks:
+  default:
+    desc: "List tasks"
+    silent: true
+    cmds:
+      - task --list
+
+  build:
+    desc: "Build universal (arm64 + x86_64) ad-hoc-signed pam_watchid.so"
+    sources:
+      - "{{.SOURCE}}"
+    generates:
+      - "{{.LIBRARY_NAME}}"
+    cmds:
+      - swiftc {{.SOURCE}} -emit-library -target arm64-apple-macosx{{.MIN_MACOS}}  -o {{.LIBRARY_NAME}}.arm64
+      - swiftc {{.SOURCE}} -emit-library -target x86_64-apple-macosx{{.MIN_MACOS}} -o {{.LIBRARY_NAME}}.x86_64
+      - lipo -create {{.LIBRARY_NAME}}.arm64 {{.LIBRARY_NAME}}.x86_64 -output {{.LIBRARY_NAME}}
+      - rm -f {{.LIBRARY_NAME}}.arm64 {{.LIBRARY_NAME}}.x86_64
+      - codesign --force --sign - --timestamp=none {{.LIBRARY_NAME}}
+
+  verify:
+    desc: "Inspect arches, signature, PAM symbols"
+    deps: [build]
+    silent: true
+    cmds:
+      - 'echo "── lipo -info ──"'
+      - lipo -info {{.LIBRARY_NAME}}
+      - echo
+      - 'echo "── codesign -dv ──"'
+      - codesign -dv {{.LIBRARY_NAME}} 2>&1 | head -10
+      - echo
+      - 'echo "── PAM symbols (arm64 slice) ──"'
+      - nm -arch arm64 -gU {{.LIBRARY_NAME}} 2>/dev/null | grep -E "pam_sm_" || echo "(none visible)"
+
+  install:
+    desc: "Install pam_watchid.so to /usr/local/lib/pam (requires sudo)"
+    deps: [build]
+    cmds:
+      - sudo mkdir -p {{.DESTINATION}}
+      - sudo install -m 0444 -o root -g wheel {{.LIBRARY_NAME}} {{.DESTINATION}}/{{.LIBRARY_NAME}}.{{.VERSION}}
+
+  uninstall:
+    desc: "Remove installed pam_watchid module"
+    cmds:
+      - sudo rm -f {{.DESTINATION}}/{{.LIBRARY_NAME}}.{{.VERSION}}
+
+  clean:
+    desc: "Remove build artifacts"
+    cmds:
+      - rm -f {{.LIBRARY_NAME}} {{.LIBRARY_NAME}}.arm64 {{.LIBRARY_NAME}}.x86_64
